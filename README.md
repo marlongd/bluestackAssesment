@@ -85,11 +85,32 @@ npm run build        # compile to dist/
 | PUT    | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Replace a note. Requires `If-Match: <version>`.  |
 | DELETE | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Soft-delete a note. Returns `204`.               |
 
-Errors are returned in a consistent shape:
+Errors are returned in a consistent shape, with a stable `code` clients can
+branch on:
 
 ```json
 { "statusCode": 400, "error": "BadRequest", "message": "...", "code": "BAD_REQUEST" }
 ```
+
+| Status | `code`              | When                                                     |
+| ------ | ------------------- | -------------------------------------------------------- |
+| 400    | `BAD_REQUEST`       | Invalid/missing/unknown body or query fields; bad `If-Match`. |
+| 401    | `UNAUTHORIZED`      | Missing or unknown `X-User-Id`.                           |
+| 403    | `FORBIDDEN`         | The caller is not a member of the team.                   |
+| 404    | `NOT_FOUND`         | Unknown route, team, user, or note.                       |
+| 409    | `CONFLICT`          | Stale `If-Match`; adding an existing member.              |
+| 413    | `PAYLOAD_TOO_LARGE` | Request body exceeds `BODY_LIMIT`.                        |
+| 500    | `INTERNAL_ERROR`    | Unexpected server error (details logged, never returned). |
+
+Unexpected errors never leak stack traces, SQL text, or file paths — the client
+only ever sees the envelope above.
+
+### Request limits
+
+The maximum accepted request body size is configurable via `BODY_LIMIT`
+(default `100kb`; accepts `100kb`, `1mb`, or a byte count). Oversized requests
+receive `413`. This is an **operational safeguard** against large payloads, not
+a per-note product limit.
 
 ### Deletion
 

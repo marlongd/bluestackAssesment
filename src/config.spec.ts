@@ -1,4 +1,4 @@
-import { getDatabasePath, getPort, SERVICE_NAME } from './config';
+import { getBodyLimit, getDatabasePath, getPort, SERVICE_NAME } from './config';
 
 describe('getPort', () => {
   const originalPort = process.env.PORT;
@@ -63,5 +63,35 @@ describe('getDatabasePath', () => {
 describe('SERVICE_NAME', () => {
   it('is a non-empty string', () => {
     expect(SERVICE_NAME).toBe('team-notes-api');
+  });
+});
+
+describe('getBodyLimit', () => {
+  const original = process.env.BODY_LIMIT;
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.BODY_LIMIT;
+    } else {
+      process.env.BODY_LIMIT = original;
+    }
+  });
+
+  it('defaults to 100kb when BODY_LIMIT is unset', () => {
+    delete process.env.BODY_LIMIT;
+
+    expect(getBodyLimit()).toBe('100kb');
+  });
+
+  it.each(['100kb', '1mb', '512', '2.5mb'])('accepts %s', (value) => {
+    process.env.BODY_LIMIT = value;
+
+    expect(getBodyLimit()).toBe(value);
+  });
+
+  it('rejects a malformed size', () => {
+    process.env.BODY_LIMIT = 'lots';
+
+    expect(() => getBodyLimit()).toThrow(/Invalid BODY_LIMIT/);
   });
 });

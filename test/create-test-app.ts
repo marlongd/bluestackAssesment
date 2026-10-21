@@ -1,5 +1,5 @@
-import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,7 +7,7 @@ import { configureApp } from '../src/app.config';
 import { AppModule } from '../src/app.module';
 
 export interface TestApp {
-  app: INestApplication;
+  app: NestExpressApplication;
   close: () => Promise<void>;
 }
 
@@ -23,7 +23,7 @@ export async function createTestApp(): Promise<TestApp> {
     imports: [AppModule],
   }).compile();
 
-  const app = moduleFixture.createNestApplication();
+  const app = moduleFixture.createNestApplication<NestExpressApplication>();
   configureApp(app);
   await app.init();
 

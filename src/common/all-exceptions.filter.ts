@@ -45,6 +45,18 @@ function messageFromException(exception: HttpException): string {
 }
 
 /**
+ * Body-parser raises its own error (not a Nest HttpException) when a request
+ * body exceeds the configured limit. Normalize it to a 413.
+ */
+function asPayloadTooLarge(exception: unknown): boolean {
+  return (
+    typeof exception === 'object' &&
+    exception !== null &&
+    (exception as { type?: string }).type === 'entity.too.large'
+  );
+}
+
+/**
  * Converts any thrown error into a single, predictable response shape and
  * makes sure internal details (stack traces, SQL text, file paths) never leak.
  */
@@ -54,6 +66,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
+
+    if (asPayloadTooLarge(exception)) {
+      const body: ErrorResponse = {
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        error: 'PayloadTooLarge',
+        message: 'Request body is too large',
+        code: 'PAYLOAD_TOO_LARGE',
+      };
+      response.status(HttpStatus.PAYLOAD_TOO_LARGE).json(body);
+      return;
+    }
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
