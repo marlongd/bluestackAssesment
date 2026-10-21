@@ -1,10 +1,20 @@
 # Team Notes API
 
-A small REST service for capturing and sharing notes within teams.
+A small REST service for capturing and sharing notes within teams, built with
+[NestJS](https://nestjs.com/) and TypeScript on top of SQLite. It is designed as
+a focused demo: a clean, tested HTTP surface with a deliberate set of
+documented trade-offs rather than a production-hardened system.
 
-> **Status:** early scaffold. `GET /health`, the database layer, users, and team
-> membership exist today; the notes API is built up in the stories described in
-> the README's roadmap.
+## Features
+
+- **Users & teams** — create users, create teams, and add members.
+- **Team-scoped notes** — create, list (paginated), retrieve, update, and
+  soft-delete notes within a team.
+- **Optimistic concurrency** — updates use `If-Match` versioning so concurrent
+  saves can't silently clobber each other.
+- **Soft deletion** — deleted notes are retained and hidden, not destroyed.
+- **Consistent errors** — every error uses one JSON envelope with a stable
+  machine-readable `code`, and never leaks internal details.
 
 ## Prerequisites
 
@@ -17,28 +27,34 @@ A small REST service for capturing and sharing notes within teams.
 npm install
 ```
 
+Copy `.env.example` to `.env` to override defaults (all variables are optional):
+
+| Variable        | Default          | Purpose                                            |
+| --------------- | ---------------- | -------------------------------------------------- |
+| `PORT`          | `3000`           | HTTP port the service listens on.                  |
+| `DATABASE_PATH` | `data/notes.db`  | SQLite file location (`:memory:` for ephemeral).   |
+| `BODY_LIMIT`    | `100kb`          | Maximum accepted request body size.                |
+
 ## Run
 
 ```sh
 npm run start        # start once
 npm run start:dev    # start with watch mode
-npm run start:prod   # run the compiled build (after npm run build)
+npm run build        # compile to dist/
+npm run start:prod   # run the compiled build
 ```
 
-The service listens on `http://localhost:3000` by default. Override with the
-`PORT` environment variable (copy `.env.example` to `.env` to get started).
+The service listens on `http://localhost:3000` by default. Migrations are
+applied automatically on startup.
 
 ## Storage
 
-The service uses a local SQLite database file. By default it is created at
-`data/notes.db` relative to where the service is run. Override the location with
-the `DATABASE_PATH` environment variable (set it to `:memory:` for an ephemeral
-database).
+The service uses a local SQLite database file (`data/notes.db` by default),
+accessed through `better-sqlite3` — no ORM or generated client.
 
 Schema migrations live in `migrations/` as plain `.sql` files. They are applied
 automatically on startup, in filename order, and recorded in the
-`schema_migrations` table so each migration runs exactly once. No ORM or
-generated client is used.
+`schema_migrations` table so each migration runs exactly once.
 
 ```sh
 # Use a throwaway database for manual testing
@@ -64,11 +80,16 @@ must be a member of a team to act within it; non-members receive `403`.
 ## Quality checks
 
 ```sh
-npm run typecheck    # tsc --noEmit
-npm run lint         # eslint
+npm run typecheck    # tsc --noEmit over src and test
+npm run lint         # eslint, zero warnings allowed
 npm run test         # jest (unit + e2e)
 npm run build        # compile to dist/
 ```
+
+Tests run through a small harness (`test/create-test-app.ts`) that boots the
+real application against a fresh temporary SQLite file per suite and applies the
+same `configureApp()` used in production. End-to-end specs live alongside it in
+`test/`; unit specs sit next to the code they cover.
 
 ## Endpoints
 
@@ -84,6 +105,8 @@ npm run build        # compile to dist/
 | GET    | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Retrieve a single note.                          |
 | PUT    | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Replace a note. Requires `If-Match: <version>`.  |
 | DELETE | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Soft-delete a note. Returns `204`.               |
+
+### Errors
 
 Errors are returned in a consistent shape, with a stable `code` clients can
 branch on:
@@ -112,13 +135,14 @@ The maximum accepted request body size is configurable via `BODY_LIMIT`
 receive `413`. This is an **operational safeguard** against large payloads, not
 a per-note product limit.
 
-### Deletion
+### Pagination
 
-Notes are **soft-deleted**: `DELETE` stamps a `deleted_at` timestamp and keeps
-the row rather than removing it. Soft-deleted notes disappear from `GET` (single
-and list) and are treated as `404`. There is no restore or purge endpoint yet,
-and no unique constraint on note fields, so a removed title can be re-used. The
-`deleted_at` column exists so a restore feature can be added later.
+`GET /teams/:teamId/notes` accepts `limit` (default `20`, max `100`) and
+`offset` (default `0`) query parameters and returns an envelope:
+
+```json
+{ "items": [ /* notes */ ], "total": 3, "limit": 20, "offset": 0 }
+```
 
 ### Concurrency (optimistic locking)
 
@@ -131,14 +155,18 @@ than sending diffs, and the client should debounce saves and retry on a 409.
 - Missing or malformed `If-Match` → `400 Bad Request`.
 - Stale `If-Match` → `409 Conflict`.
 
-### Pagination
+The version check and write happen in a single SQL statement
+(`NotesRepository.updateIfVersion`), so two racing writers cannot both succeed.
 
-`GET /teams/:teamId/notes` accepts `limit` (default `20`, max `100`) and
-`offset` (default `0`) query parameters and returns an envelope:
+### Deletion
 
-```json
-{ "items": [ /* notes */ ], "total": 3, "limit": 20, "offset": 0 }
-```
+Notes are **soft-deleted**: `DELETE` stamps a `deleted_at` timestamp and keeps
+the row rather than removing it. Soft-deleted notes disappear from `GET` (single
+and list) and are treated as `404`. There is no restore or purge endpoint yet,
+and no unique constraint on note fields, so a removed title can be re-used. The
+`deleted_at` column exists so a restore feature can be added later.
+
+## Walkthrough
 
 ```sh
 # Health
@@ -174,4 +202,52 @@ curl -s -X PUT http://localhost:3000/teams/$TEAM/notes/$NOTE \
 
 # Soft-delete it
 curl -s -X DELETE http://localhost:3000/teams/$TEAM/notes/$NOTE -H "X-User-Id: $ADA" -o /dev/null -w '%{http_code}\n'
+```
+
+## Design decisions
+
+- **Demo identity via header.** Real auth is out of scope, so identity is a
+  trusted `X-User-Id` header, isolated behind `DemoIdentityGuard` and
+  `@CurrentUser()` for easy replacement later.
+- **Authorization always resolves the team from the route.** The team id in the
+  path is the sole basis for access; note ids never authorize. Membership is
+  checked before any note operation.
+- **403 for non-members, even on unknown teams.** This keeps the contract simple
+  and consistent (a member of the wrong team should never reach note logic) at
+  the cost of revealing whether a team exists. A production system might prefer
+  `404` to avoid that leak.
+- **Versioning with `If-Match`.** Chosen over "last write wins" and over
+  per-field patching because whole-body replacement matches how note editors
+  flush saves. Concurrency-safe via a single conditional `UPDATE`.
+- **Stale writes are `409`, not `412`.** HTTP-pure semantics suggest
+  `412 Precondition Failed`; `409 Conflict` was chosen as the more familiar
+  signal for API consumers. This is a deliberate deviation, documented here.
+- **Soft delete.** Notes are retained with a `deleted_at` stamp rather than
+  hard-deleted, leaving room for a future restore and giving a cheap audit
+  trail (the deleter is recorded in `updated_by`).
+
+## Limitations & next steps
+
+- **No real authentication** — the `X-User-Id` mechanism is demo-only.
+- **No note ownership or per-note permissions** — any team member may edit or
+  delete any note in the team.
+- **No restore/purge** for soft-deleted notes, and no unique constraints on note
+  fields.
+- **No rate limiting, caching, or structured logging/metrics.**
+- **Concurrency is optimistic only** — there is no locking around long edits.
+- **`:memory:` databases** are per-connection; use a file path for multi-process
+  setups.
+
+## Project layout
+
+```
+migrations/          Plain-SQL schema migrations (applied on startup)
+src/auth/            Demo identity guard + current-user decorator
+src/common/          Error envelope, pagination types
+src/config.ts        Environment parsing (PORT, DATABASE_PATH, BODY_LIMIT)
+src/database/        SQLite connection, migration runner
+src/notes/           Notes controller, service, repository, DTOs
+src/teams/           Teams controller, service, repository
+src/users/           Users controller, service, repository
+test/                App harness and end-to-end specs
 ```
