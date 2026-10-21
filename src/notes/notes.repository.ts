@@ -114,4 +114,43 @@ export class NotesRepository {
 
     return row ? toNote(row) : null;
   }
+
+  /**
+   * Replaces a live note's title and body only if its stored version matches
+   * `expectedVersion`, incrementing the version and recording the editor.
+   * Returns the updated note, or null if the version did not match (a stale
+   * concurrent write). The check-and-write is a single statement, so it is
+   * race-free.
+   */
+  updateIfVersion(
+    teamId: string,
+    noteId: string,
+    expectedVersion: number,
+    title: string,
+    body: string,
+    editorId: string,
+  ): Note | null {
+    const changed = this.db
+      .prepare(
+        `UPDATE notes
+         SET title = ?, body = ?, version = version + 1,
+             updated_by = ?, updated_at = ?
+         WHERE id = ? AND team_id = ? AND deleted_at IS NULL AND version = ?`,
+      )
+      .run(
+        title,
+        body,
+        editorId,
+        new Date().toISOString(),
+        noteId,
+        teamId,
+        expectedVersion,
+      );
+
+    if (changed.changes !== 1) {
+      return null;
+    }
+
+    return this.findInTeam(teamId, noteId);
+  }
 }

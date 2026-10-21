@@ -34,3 +34,18 @@ export async function addMember(
     .send({ userId })
     .expect(201);
 }
+
+export async function createNote(
+  ctx: TestApp,
+  userId: string,
+  teamId: string,
+  title: string,
+  body = '',
+): Promise<{ id: string; version: number }> {
+  const response = await request(ctx.app.getHttpServer())
+    .post(`/teams/${teamId}/notes`)
+    .set('X-User-Id', userId)
+    .send({ title, body })
+    .expect(201);
+  return { id: response.body.id, version: response.body.version };
+}

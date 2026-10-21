@@ -81,12 +81,25 @@ npm run build        # compile to dist/
 | POST   | `/teams/:teamId/members` | `X-User-Id` | Owner-only. Add a member. Body: `{ "userId": string }`. |
 | POST   | `/teams/:teamId/notes`   | `X-User-Id` | Create a note. Body: `{ "title": string, "body": string }`. |
 | GET    | `/teams/:teamId/notes`   | `X-User-Id` | List a team's notes, most recently updated first.      |
+| GET    | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Retrieve a single note.                          |
+| PUT    | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Replace a note. Requires `If-Match: <version>`.  |
 
 Errors are returned in a consistent shape:
 
 ```json
 { "statusCode": 400, "error": "BadRequest", "message": "...", "code": "BAD_REQUEST" }
 ```
+
+### Concurrency (optimistic locking)
+
+Every note carries a `version` (starting at `1`). `PUT` requires an `If-Match`
+header containing the version the client last read. If the stored version has
+moved on (someone else saved first), the write is rejected with `409 Conflict`
+and the note is left unchanged — correct saves replace the whole body rather
+than sending diffs, and the client should debounce saves and retry on a 409.
+
+- Missing or malformed `If-Match` → `400 Bad Request`.
+- Stale `If-Match` → `409 Conflict`.
 
 ### Pagination
 
@@ -120,4 +133,12 @@ curl -s -X POST http://localhost:3000/teams/$TEAM/notes -H "X-User-Id: $BOB" -H 
 
 # Anyone in the team can list the notes
 curl -s "http://localhost:3000/teams/$TEAM/notes?limit=20&offset=0" -H "X-User-Id: $ADA"
+
+# Retrieve one note (fill in NOTE and VERSION from a create/list response)
+curl -s http://localhost:3000/teams/$TEAM/notes/$NOTE -H "X-User-Id: $ADA"
+
+# Update it, asserting the version you last read
+curl -s -X PUT http://localhost:3000/teams/$TEAM/notes/$NOTE \
+  -H "X-User-Id: $ADA" -H "If-Match: $VERSION" -H 'Content-Type: application/json' \
+  -d '{"title":"Kickoff (revised)","body":"Updated agenda..."}'
 ```

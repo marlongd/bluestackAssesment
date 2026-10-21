@@ -1,4 +1,8 @@
-import { ForbiddenException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { TeamMembership } from '../teams/team.entity';
 import { TeamsService } from '../teams/teams.service';
 import type { User } from '../users/user.entity';
@@ -80,6 +84,104 @@ describe('NotesService', () => {
 
       expect(() => service.list('t1', ada, 10, 0)).toThrow(ForbiddenException);
       expect(notes.listForTeam).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('get', () => {
+    it('returns a note for a member', () => {
+      const note = { id: 'n1' };
+      const notes = { findInTeam: jest.fn().mockReturnValue(note) };
+      const teams = {
+        requireMembership: jest.fn().mockReturnValue(membership),
+      };
+      const service = makeService(notes, teams);
+
+      expect(service.get('t1', ada, 'n1')).toBe(note);
+    });
+
+    it('throws 404 for a missing note', () => {
+      const notes = { findInTeam: () => null };
+      const teams = { requireMembership: jest.fn() };
+      const service = makeService(notes, teams);
+
+      expect(() => service.get('t1', ada, 'n1')).toThrow(NotFoundException);
+    });
+
+    it('rejects a non-member', () => {
+      const teams = {
+        requireMembership: () => {
+          throw new ForbiddenException();
+        },
+      };
+      const service = makeService({}, teams);
+
+      expect(() => service.get('t1', ada, 'n1')).toThrow(ForbiddenException);
+    });
+  });
+
+  describe('update', () => {
+    it('updates a note with the matching version', () => {
+      const updated = { id: 'n1', version: 2 };
+      const notes = {
+        findInTeam: jest.fn().mockReturnValue({ id: 'n1', version: 1 }),
+        updateIfVersion: jest.fn().mockReturnValue(updated),
+      };
+      const teams = {
+        requireMembership: jest.fn().mockReturnValue(membership),
+      };
+      const service = makeService(notes, teams);
+
+      const result = service.update('t1', ada, 'n1', 1, 'T', 'B');
+
+      expect(notes.updateIfVersion).toHaveBeenCalledWith(
+        't1',
+        'n1',
+        1,
+        'T',
+        'B',
+        'ada',
+      );
+      expect(result).toBe(updated);
+    });
+
+    it('throws 404 for a missing note', () => {
+      const notes = { findInTeam: () => null };
+      const teams = { requireMembership: jest.fn() };
+      const service = makeService(notes, teams);
+
+      expect(() => service.update('t1', ada, 'n1', 1, 'T', 'B')).toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws 409 for a stale version', () => {
+      const notes = {
+        findInTeam: jest.fn().mockReturnValue({ id: 'n1', version: 2 }),
+        updateIfVersion: jest.fn().mockReturnValue(null),
+      };
+      const teams = {
+        requireMembership: jest.fn().mockReturnValue(membership),
+      };
+      const service = makeService(notes, teams);
+
+      expect(() => service.update('t1', ada, 'n1', 1, 'T', 'B')).toThrow(
+        ConflictException,
+      );
+    });
+
+    it('rejects a non-member before touching the store', () => {
+      const notes = { findInTeam: jest.fn(), updateIfVersion: jest.fn() };
+      const teams = {
+        requireMembership: () => {
+          throw new ForbiddenException();
+        },
+      };
+      const service = makeService(notes, teams);
+
+      expect(() => service.update('t1', ada, 'n1', 1, 'T', 'B')).toThrow(
+        ForbiddenException,
+      );
+      expect(notes.updateIfVersion).not.toHaveBeenCalled();
     });
   });
 });

@@ -81,4 +81,63 @@ describe('NotesRepository', () => {
     expect(repo.listForTeam('t1', 10, 0)).toHaveLength(0);
     expect(repo.findInTeam('t1', note.id)).toBeNull();
   });
+
+  describe('updateIfVersion', () => {
+    it('updates and increments the version when the version matches', () => {
+      const note = repo.create('t1', 'Old', 'old body', 'u1');
+
+      const updated = repo.updateIfVersion(
+        't1',
+        note.id,
+        1,
+        'New',
+        'new body',
+        'u1',
+      );
+
+      expect(updated).toMatchObject({
+        id: note.id,
+        title: 'New',
+        body: 'new body',
+        version: 2,
+      });
+    });
+
+    it('records the editor and bumps updated_at', () => {
+      db.prepare(
+        'INSERT INTO users (id, name, created_at) VALUES (?, ?, ?)',
+      ).run('u2', 'Bob', 'now');
+      const note = repo.create('t1', 'Old', '', 'u1');
+      const before = note.updatedAt;
+
+      const updated = repo.updateIfVersion('t1', note.id, 1, 'New', '', 'u2');
+
+      expect(updated?.updatedBy).toBe('u2');
+      expect(updated?.updatedAt).not.toBe(before);
+    });
+
+    it('returns null for a stale version and does not change the note', () => {
+      const note = repo.create('t1', 'Old', '', 'u1');
+      repo.updateIfVersion('t1', note.id, 1, 'Newer', '', 'u1');
+
+      const stale = repo.updateIfVersion('t1', note.id, 1, 'Stale', '', 'u1');
+
+      expect(stale).toBeNull();
+      expect(repo.findInTeam('t1', note.id)).toMatchObject({
+        title: 'Newer',
+        version: 2,
+      });
+    });
+
+    it('does not update a note from another team', () => {
+      db.prepare(
+        'INSERT INTO teams (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)',
+      ).run('t2', 'Beta', 'u1', 'now');
+      const note = repo.create('t1', 'Old', '', 'u1');
+
+      expect(
+        repo.updateIfVersion('t2', note.id, 1, 'New', '', 'u1'),
+      ).toBeNull();
+    });
+  });
 });
