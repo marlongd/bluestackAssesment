@@ -33,6 +33,7 @@
     "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "^11.1.29",
     "@types/better-sqlite3": "^9.6.0",
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.0",
     "@types/supertest": "^6.0.2",

@@ -25,14 +25,14 @@ export class TeamsService {
   }
 
   /**
-   * Loads a team the caller is allowed to see, or throws 403 for non-members.
-   * (We return 403 rather than 404 per the documented authorization contract;
-   * a production system might prefer 404 to avoid leaking team existence.)
+   * Loads a team the caller is allowed to act within, or throws 403 for
+   * non-members. We return 403 rather than 404 per the documented authorization
+   * contract; a production system might prefer 404 to avoid leaking existence.
    */
   requireMembership(teamId: string, userId: string): TeamMembership {
     const membership = this.teams.getMembership(teamId, userId);
     if (!membership) {
-      throw new ForbiddenException(`Team "${teamId}" was not found`);
+      throw new ForbiddenException(`You are not a member of team "${teamId}"`);
     }
     return membership;
   }

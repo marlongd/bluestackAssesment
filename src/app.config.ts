@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { AllExceptionsFilter } from './common/all-exceptions.filter';
 
-/** Applies the global request validation and transformation pipe. */
+/** Applies global request validation, transformation, and error handling. */
 export function configureApp(app: INestApplication): void {
   app.useGlobalPipes(
     new ValidationPipe({
@@ -9,4 +10,5 @@ export function configureApp(app: INestApplication): void {
       transform: true,
     }),
   );
+  app.useGlobalFilters(new AllExceptionsFilter());
 }

@@ -72,13 +72,30 @@ npm run build        # compile to dist/
 
 ## Endpoints
 
-| Method | Path                   | Auth        | Description                                        |
-| ------ | ---------------------- | ----------- | -------------------------------------------------- |
-| GET    | `/health`              | none        | Liveness check; reports process and database.      |
-| POST   | `/users`               | none        | Create a user. Body: `{ "name": string }`.         |
-| POST   | `/teams`               | `X-User-Id` | Create a team; the caller becomes its owner.       |
-| GET    | `/teams`               | `X-User-Id` | List teams the caller belongs to.                  |
+| Method | Path                     | Auth        | Description                                            |
+| ------ | ------------------------ | ----------- | ------------------------------------------------------ |
+| GET    | `/health`                | none        | Liveness check; reports process and database.          |
+| POST   | `/users`                 | none        | Create a user. Body: `{ "name": string }`.             |
+| POST   | `/teams`                 | `X-User-Id` | Create a team; the caller becomes its owner.           |
+| GET    | `/teams`                 | `X-User-Id` | List teams the caller belongs to.                      |
 | POST   | `/teams/:teamId/members` | `X-User-Id` | Owner-only. Add a member. Body: `{ "userId": string }`. |
+| POST   | `/teams/:teamId/notes`   | `X-User-Id` | Create a note. Body: `{ "title": string, "body": string }`. |
+| GET    | `/teams/:teamId/notes`   | `X-User-Id` | List a team's notes, most recently updated first.      |
+
+Errors are returned in a consistent shape:
+
+```json
+{ "statusCode": 400, "error": "BadRequest", "message": "...", "code": "BAD_REQUEST" }
+```
+
+### Pagination
+
+`GET /teams/:teamId/notes` accepts `limit` (default `20`, max `100`) and
+`offset` (default `0`) query parameters and returns an envelope:
+
+```json
+{ "items": [ /* notes */ ], "total": 3, "limit": 20, "offset": 0 }
+```
 
 ```sh
 # Health
@@ -97,4 +114,10 @@ curl -s -X POST http://localhost:3000/teams/$TEAM/members -H "X-User-Id: $ADA" -
 
 # Bob now sees the team
 curl -s http://localhost:3000/teams -H "X-User-Id: $BOB"
+
+# Bob creates a note in the team
+curl -s -X POST http://localhost:3000/teams/$TEAM/notes -H "X-User-Id: $BOB" -H 'Content-Type: application/json' -d '{"title":"Kickoff","body":"Agenda..."}'
+
+# Anyone in the team can list the notes
+curl -s "http://localhost:3000/teams/$TEAM/notes?limit=20&offset=0" -H "X-User-Id: $ADA"
 ```

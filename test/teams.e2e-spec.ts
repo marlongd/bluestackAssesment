@@ -1,26 +1,6 @@
 import request from 'supertest';
 import { createTestApp, type TestApp } from './create-test-app';
-
-async function createUser(app: TestApp, name: string): Promise<string> {
-  const response = await request(app.app.getHttpServer())
-    .post('/users')
-    .send({ name })
-    .expect(201);
-  return response.body.id;
-}
-
-async function createTeam(
-  app: TestApp,
-  userId: string,
-  name: string,
-): Promise<string> {
-  const response = await request(app.app.getHttpServer())
-    .post('/teams')
-    .set('X-User-Id', userId)
-    .send({ name })
-    .expect(201);
-  return response.body.id;
-}
+import { createTeam, createUser } from './helpers';
 
 describe('Identity and team access (e2e)', () => {
   let ctx: TestApp;
