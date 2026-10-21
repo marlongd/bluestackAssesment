@@ -1,9 +1,12 @@
 export const SERVICE_NAME = 'team-notes-api';
 
+export const DEFAULT_PORT = 3000;
+export const DEFAULT_DATABASE_PATH = 'data/notes.db';
+
 export function getPort(): number {
   const raw = process.env.PORT;
   if (raw === undefined || raw === '') {
-    return 3000;
+    return DEFAULT_PORT;
   }
 
   const parsed = Number(raw);
@@ -14,4 +17,13 @@ export function getPort(): number {
   }
 
   return parsed;
+}
+
+export function getDatabasePath(): string {
+  const raw = process.env.DATABASE_PATH;
+  if (raw === undefined || raw === '') {
+    return DEFAULT_DATABASE_PATH;
+  }
+
+  return raw;
 }

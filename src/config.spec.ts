@@ -1,4 +1,4 @@
-import { getPort } from './config';
+import { getDatabasePath, getPort, SERVICE_NAME } from './config';
 
 describe('getPort', () => {
   const originalPort = process.env.PORT;
@@ -33,5 +33,35 @@ describe('getPort', () => {
     process.env.PORT = '70000';
 
     expect(() => getPort()).toThrow(/Invalid PORT/);
+  });
+});
+
+describe('getDatabasePath', () => {
+  const original = process.env.DATABASE_PATH;
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.DATABASE_PATH;
+    } else {
+      process.env.DATABASE_PATH = original;
+    }
+  });
+
+  it('defaults to data/notes.db when DATABASE_PATH is unset', () => {
+    delete process.env.DATABASE_PATH;
+
+    expect(getDatabasePath()).toBe('data/notes.db');
+  });
+
+  it('uses DATABASE_PATH when provided', () => {
+    process.env.DATABASE_PATH = 'tmp/custom.db';
+
+    expect(getDatabasePath()).toBe('tmp/custom.db');
+  });
+});
+
+describe('SERVICE_NAME', () => {
+  it('is a non-empty string', () => {
+    expect(SERVICE_NAME).toBe('team-notes-api');
   });
 });
