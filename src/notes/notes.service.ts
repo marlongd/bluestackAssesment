@@ -76,6 +76,17 @@ export class NotesService {
     return updated;
   }
 
+  /** Soft-deletes a live note for a member. */
+  delete(teamId: string, user: User, noteId: string): void {
+    this.teams.requireMembership(teamId, user.id);
+    this.requireNote(teamId, noteId);
+
+    const deleted = this.notes.softDelete(teamId, noteId, user.id);
+    if (!deleted) {
+      throw new NotFoundException(`Note "${noteId}" was not found`);
+    }
+  }
+
   private requireNote(teamId: string, noteId: string): Note {
     const note = this.notes.findInTeam(teamId, noteId);
     if (!note) {

@@ -184,4 +184,43 @@ describe('NotesService', () => {
       expect(notes.updateIfVersion).not.toHaveBeenCalled();
     });
   });
+
+  describe('delete', () => {
+    it('soft-deletes a live note for a member', () => {
+      const notes = {
+        findInTeam: jest.fn().mockReturnValue({ id: 'n1' }),
+        softDelete: jest.fn().mockReturnValue(true),
+      };
+      const teams = {
+        requireMembership: jest.fn().mockReturnValue(membership),
+      };
+      const service = makeService(notes, teams);
+
+      service.delete('t1', ada, 'n1');
+
+      expect(notes.softDelete).toHaveBeenCalledWith('t1', 'n1', 'ada');
+    });
+
+    it('throws 404 for an already-missing note', () => {
+      const notes = { findInTeam: () => null, softDelete: jest.fn() };
+      const teams = { requireMembership: jest.fn() };
+      const service = makeService(notes, teams);
+
+      expect(() => service.delete('t1', ada, 'n1')).toThrow(NotFoundException);
+      expect(notes.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-member before touching the store', () => {
+      const notes = { findInTeam: jest.fn(), softDelete: jest.fn() };
+      const teams = {
+        requireMembership: () => {
+          throw new ForbiddenException();
+        },
+      };
+      const service = makeService(notes, teams);
+
+      expect(() => service.delete('t1', ada, 'n1')).toThrow(ForbiddenException);
+      expect(notes.softDelete).not.toHaveBeenCalled();
+    });
+  });
 });

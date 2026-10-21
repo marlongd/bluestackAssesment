@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -89,5 +90,15 @@ export class NotesController {
       dto.title,
       dto.body,
     );
+  }
+
+  @Delete(':noteId')
+  @HttpCode(204)
+  delete(
+    @CurrentUser() user: User,
+    @Param('teamId') teamId: string,
+    @Param('noteId') noteId: string,
+  ): void {
+    this.notes.delete(teamId, user, noteId);
   }
 }

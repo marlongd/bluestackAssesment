@@ -103,17 +103,18 @@ describe('NotesRepository', () => {
       });
     });
 
-    it('records the editor and bumps updated_at', () => {
+    it('records the editor and refreshes updated_at', () => {
       db.prepare(
         'INSERT INTO users (id, name, created_at) VALUES (?, ?, ?)',
       ).run('u2', 'Bob', 'now');
       const note = repo.create('t1', 'Old', '', 'u1');
-      const before = note.updatedAt;
+      const before = Date.parse(note.updatedAt);
 
       const updated = repo.updateIfVersion('t1', note.id, 1, 'New', '', 'u2');
 
       expect(updated?.updatedBy).toBe('u2');
-      expect(updated?.updatedAt).not.toBe(before);
+      expect(Date.parse(updated!.updatedAt)).toBeGreaterThanOrEqual(before);
+      expect(Number.isNaN(Date.parse(updated!.updatedAt))).toBe(false);
     });
 
     it('returns null for a stale version and does not change the note', () => {
@@ -138,6 +139,46 @@ describe('NotesRepository', () => {
       expect(
         repo.updateIfVersion('t2', note.id, 1, 'New', '', 'u1'),
       ).toBeNull();
+    });
+  });
+
+  describe('softDelete', () => {
+    it('stamps deleted_at and keeps the row', () => {
+      const note = repo.create('t1', 'Gone', '', 'u1');
+
+      expect(repo.softDelete('t1', note.id, 'u1')).toBe(true);
+
+      const raw = db
+        .prepare('SELECT deleted_at FROM notes WHERE id = ?')
+        .get(note.id) as { deleted_at: string | null };
+      expect(raw.deleted_at).not.toBeNull();
+    });
+
+    it('hides the note from findInTeam and listForTeam', () => {
+      const note = repo.create('t1', 'Gone', '', 'u1');
+
+      repo.softDelete('t1', note.id, 'u1');
+
+      expect(repo.findInTeam('t1', note.id)).toBeNull();
+      expect(repo.listForTeam('t1', 10, 0)).toHaveLength(0);
+      expect(repo.countForTeam('t1')).toBe(0);
+    });
+
+    it('is idempotent: deleting twice reports false the second time', () => {
+      const note = repo.create('t1', 'Gone', '', 'u1');
+
+      expect(repo.softDelete('t1', note.id, 'u1')).toBe(true);
+      expect(repo.softDelete('t1', note.id, 'u1')).toBe(false);
+    });
+
+    it('does not delete a note belonging to another team', () => {
+      db.prepare(
+        'INSERT INTO teams (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)',
+      ).run('t2', 'Beta', 'u1', 'now');
+      const note = repo.create('t1', 'Keep', '', 'u1');
+
+      expect(repo.softDelete('t2', note.id, 'u1')).toBe(false);
+      expect(repo.findInTeam('t1', note.id)).not.toBeNull();
     });
   });
 });

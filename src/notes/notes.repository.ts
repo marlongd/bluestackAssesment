@@ -153,4 +153,26 @@ export class NotesRepository {
 
     return this.findInTeam(teamId, noteId);
   }
+
+  /**
+   * Marks a live note as deleted by stamping `deleted_at` and recording who
+   * deleted it. The row is retained. Returns true if a live note was affected.
+   */
+  softDelete(teamId: string, noteId: string, deleterId: string): boolean {
+    const changed = this.db
+      .prepare(
+        `UPDATE notes
+         SET deleted_at = ?, updated_by = ?, updated_at = ?
+         WHERE id = ? AND team_id = ? AND deleted_at IS NULL`,
+      )
+      .run(
+        new Date().toISOString(),
+        deleterId,
+        new Date().toISOString(),
+        noteId,
+        teamId,
+      );
+
+    return changed.changes === 1;
+  }
 }

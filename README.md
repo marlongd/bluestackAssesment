@@ -83,12 +83,21 @@ npm run build        # compile to dist/
 | GET    | `/teams/:teamId/notes`   | `X-User-Id` | List a team's notes, most recently updated first.      |
 | GET    | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Retrieve a single note.                          |
 | PUT    | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Replace a note. Requires `If-Match: <version>`.  |
+| DELETE | `/teams/:teamId/notes/:noteId` | `X-User-Id` | Soft-delete a note. Returns `204`.               |
 
 Errors are returned in a consistent shape:
 
 ```json
 { "statusCode": 400, "error": "BadRequest", "message": "...", "code": "BAD_REQUEST" }
 ```
+
+### Deletion
+
+Notes are **soft-deleted**: `DELETE` stamps a `deleted_at` timestamp and keeps
+the row rather than removing it. Soft-deleted notes disappear from `GET` (single
+and list) and are treated as `404`. There is no restore or purge endpoint yet,
+and no unique constraint on note fields, so a removed title can be re-used. The
+`deleted_at` column exists so a restore feature can be added later.
 
 ### Concurrency (optimistic locking)
 
@@ -141,4 +150,7 @@ curl -s http://localhost:3000/teams/$TEAM/notes/$NOTE -H "X-User-Id: $ADA"
 curl -s -X PUT http://localhost:3000/teams/$TEAM/notes/$NOTE \
   -H "X-User-Id: $ADA" -H "If-Match: $VERSION" -H 'Content-Type: application/json' \
   -d '{"title":"Kickoff (revised)","body":"Updated agenda..."}'
+
+# Soft-delete it
+curl -s -X DELETE http://localhost:3000/teams/$TEAM/notes/$NOTE -H "X-User-Id: $ADA" -o /dev/null -w '%{http_code}\n'
 ```
