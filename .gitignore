@@ -1,0 +1,24 @@
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+*.tsbuildinfo
+
+# Coverage
+/coverage
+
+# Local database files (added in a later story)
+/data
+*.db
+*.db-journal
+*.sqlite
+
+# Env files
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
