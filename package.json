@@ -22,6 +22,8 @@
     "@nestjs/core": "^11.1.29",
     "@nestjs/platform-express": "^11.1.29",
     "better-sqlite3": "^12.11.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
